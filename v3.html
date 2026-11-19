@@ -1295,7 +1295,7 @@ const G={THREE,S,M,on,fire,TABS,ACTIONS,EVENTS,EV_SCHED,resetMods,scene,room,cam
   get AC(){return AC;}, get master(){return master;}, get revIn(){return revIn;}, get radioIn(){return radioIn;}, get civIn(){return civIn;}, get tab(){return tab;}, set tab(v){tab=v;actDirty=true;},
   dirty(){ actDirty=cardDirty=hudDirty=bannerDirty=true; }, get topo(){return topoFeatures;}, get hoverUI(){return hoverUI;} };
 window.__g=G;
-for(const m of ['hands','tree','units','world','comms','campaign']){ try{ (await import(`./v3/${m}.js`)).default(G); }catch(e){ console.error('módulo '+m, e); } }
+for(const m of ['hands','tree','units','world','comms','campaign','tutorial']){ try{ (await import(`./v3/${m}.js`)).default(G); }catch(e){ console.error('módulo '+m, e); } }
 G.dirty();
 </script>
 </body>

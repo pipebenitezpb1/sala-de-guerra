@@ -33,7 +33,7 @@ export default function (G) {
   const setArmed = v => { if (v === armed) return; armed = v; beep(v ? 1200 : 500, v ? 1600 : 0, 0.06, 'square', 0.05); pulse(0.6, 80); addLog(v ? 'Llave girada. Sistema de lanzamiento ARMADO.' : 'Llave en reposo. Sistema desarmado.', v ? '#ff6a5a' : '#9fc9ce'); };
   const toggleCover = () => { coverOpen = !coverOpen; beep(coverOpen ? 900 : 400, 0, 0.04, 'square', 0.04); pulse(0.3, 40); };
   function pressButton() {
-    if (S.time - lastTouch < 0.8) return; lastTouch = S.time; btnDown = 1; pulse(1, 200);
+    if (S.time - lastTouch < 0.8) return; lastTouch = S.time; btnDown = 1; pulse(1, 200); G.fire('buttonPress');
     if (!coverOpen) return;
     if (!armed) { beep(180, 140, 0.2, 'square', 0.05); addLog('El botón no responde: gire primero la llave.', '#ffb340'); return; }
     if (!S.armed) { beep(180, 140, 0.2, 'square', 0.05); addLog('Sin objetivo fijado. Apunte a un objetivo en el globo.', '#ffb340'); return; }
