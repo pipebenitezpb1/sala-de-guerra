@@ -74,9 +74,13 @@ export default function (G) {
 
   // ---------- adornos: foto familiar, taza, carpeta ----------
   const photo = makePanel(0.11, 0.14, 330, 420, room); photo.mesh.position.set(-0.24, 0.83, -0.33); photo.mesh.rotation.set(-0.35, 0.25, 0, 'YXZ');
-  { const { g, w: W, h: H } = photo; const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#f2c98a'); gr.addColorStop(1, '#8a6a4a'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-    g.fillStyle = '#3a2a22'; for (const [x, s] of [[105, 1], [185, 0.95], [245, 0.6], [60, 0.5]]) { g.beginPath(); g.arc(x, H - 170 * s - 60, 30 * s, 0, 7); g.fill(); g.fillRect(x - 34 * s, H - 150 * s - 40, 68 * s, 190 * s); }
-    g.fillStyle = '#fff8e8'; g.font = `italic 25px Georgia, serif`; g.fillText('Te esperamos en casa', 38, H - 16); g.strokeStyle = '#2a1c14'; g.lineWidth = 14; g.strokeRect(0, 0, W, H); photo.tex.needsUpdate = true; }
+  function drawPhoto(caption = 'Te esperamos en casa', gone = false) {
+    const { g, w: W, h: H } = photo; g.clearRect(0, 0, W, H); const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, gone ? '#55524e' : '#f2c98a'); gr.addColorStop(1, gone ? '#2a2826' : '#8a6a4a'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    g.fillStyle = gone ? '#1c1a19' : '#3a2a22'; for (const [x, s] of [[105, 1], [185, 0.95], [245, 0.6], [60, 0.5]]) { g.beginPath(); g.arc(x, H - 170 * s - 60, 30 * s, 0, 7); g.fill(); g.fillRect(x - 34 * s, H - 150 * s - 40, 68 * s, 190 * s); }
+    if (caption) { g.fillStyle = '#fff8e8'; g.font = `italic ${caption.length > 24 ? 20 : 25}px Georgia, serif`; g.textAlign = 'center'; g.fillText(caption, W / 2, H - 16); g.textAlign = 'left'; }
+    g.strokeStyle = '#2a1c14'; g.lineWidth = 14; g.strokeRect(0, 0, W, H); photo.tex.needsUpdate = true;
+  }
+  drawPhoto(); G.drawPhoto = drawPhoto;
   mesh(new THREE.BoxGeometry(0.115, 0.145, 0.008), dark, room, -0.24, 0.83, -0.336).rotation.set(-0.35, 0.25, 0, 'YXZ');
   const mug = mesh(new THREE.CylinderGeometry(0.035, 0.03, 0.08, 20), std(0xe8e4dc, 0.5, 0), room, 0.5, 0.79, -0.3);
   mesh(new THREE.CylinderGeometry(0.031, 0.031, 0.002, 20), basic(0x1a0f08), room, 0.5, 0.829, -0.3);
@@ -97,10 +101,12 @@ export default function (G) {
   // ---------- manos: agarrar y tocar ----------
   const tip = V(0, 0, 0), tmp = V(0, 0, 0), q0 = new THREE.Quaternion(), q1 = new THREE.Quaternion(), nrm = V(0, 0, 0);
   const worldOf = o => o.getWorldPosition(V(0, 0, 0));
+  const handPos = c => (c.userData.src && c.userData.src.hand && c.userData.fingerPos && c.userData.fingerPos()) || V(0, 0, 0).setFromMatrixPosition(c.matrixWorld);
+  G.physNear = p => p.distanceTo(worldOf(key)) < 0.1 || (!heldBy && p.distanceTo(worldOf(handset)) < 0.14);
   for (const c of controllers) {
     c.userData.h = { key: null, phone: false, pz: {} };
     c.addEventListener('squeezestart', () => {
-      const p = V(0, 0, 0).setFromMatrixPosition(c.matrixWorld);
+      const p = handPos(c);
       if (p.distanceTo(worldOf(key)) < 0.1) { c.userData.grab = null; c.getWorldQuaternion(q0); c.userData.h.key = { q: q0.clone(), a: keyAngle }; pulse(0.3, 40); }
       else if (!heldBy && p.distanceTo(worldOf(handset)) < 0.14) { c.userData.grab = null; heldBy = c; answered = false; earT = 0; c.attach(handset); handset.position.set(0, -0.02, 0.02); handset.quaternion.identity(); beep(600, 0, 0.04, 'square', 0.03); pulse(0.4, 60); }
     });
@@ -110,7 +116,7 @@ export default function (G) {
     });
   }
   function poke(c) {
-    tip.set(0, 0, -0.03).applyMatrix4(c.matrixWorld);
+    const fp = c.userData.src && c.userData.src.hand && c.userData.fingerPos && c.userData.fingerPos(); if (fp) tip.copy(fp); else tip.set(0, 0, -0.03).applyMatrix4(c.matrixWorld);
     const st = c.userData.h.pz;
     for (const m of G.uiMeshes) {
       if (!m.visible) continue; const l = m.worldToLocal(tmp.copy(tip)); const { width: w, height: h } = m.geometry.parameters; const id = m.uuid, inside = Math.abs(l.x) < w / 2 && Math.abs(l.y) < h / 2;

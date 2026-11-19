@@ -58,11 +58,11 @@ export default function (G) {
     if (S.ended || S.paused || !S.commsDone) return;
     if (S.limited && S.time - S.limited > 25 && S.time - S.lastPlayerLaunch > 20 && !S.ceasefire && S.phase === G.GUERRA) { S.limited = 0; if (Math.random() < 0.5) { S.ceasefire = true; S.enemyActive = false; addLog('El enemigo detiene su respuesta: el intercambio fue limitado.', '#9dffb0'); } else addLog('Rivas se equivocó: el enemigo escala.', '#ff6a5a'); }
     if (ringLeft > 0) { ringLeft -= dt; if (ringLeft <= 0) { if (G.phone) G.phone.stop(); addLog(`Llamada perdida de ${cur.who}.`, '#ffb340'); if (cur.pre) adj(3, -2); cur = null; } return; }
-    if (S.event || S.time < nextT) return;
+    if (S.event || S.time < nextT || (G.family && G.family.ringing)) return;
     cur = draw(S.phase === G.GUERRA); nextT = S.time + rand(30, 46) * Math.max(G.TS, 0.5); if (!cur) return;
     ringLeft = 16 * Math.max(G.TS, 0.6); addLog('Suena el teléfono rojo. Descuélguelo para contestar.', '#ff9a40');
     if (G.phone) G.phone.ring(); else { ringLeft = 0; open(); }
   });
   on('end', () => { if (G.phone) G.phone.stop(); ringLeft = 0; cur = null; if (src) try { src.stop(); } catch (e) {} });
-  G.comms = { C, force(id) { cur = C.find(c => c.id === id); ringLeft = 0; open(); } };
+  G.comms = { C, get busy() { return ringLeft > 0; }, force(id) { cur = C.find(c => c.id === id); ringLeft = 0; open(); } };
 }

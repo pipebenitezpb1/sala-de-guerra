@@ -914,7 +914,7 @@ function preemptive(){
 function onSelect(hit){
   initAudio();
   if(!S.started) return;
-  if(S.ended){ if(S.time-S.endT>5) resetGame(); return; }
+  if(S.ended){ if(S.time-S.endT>5 && fire('beforeReset')!==true) resetGame(); return; }
   if(!hit) return;
   if(fire('select',hit)===true) return;
   if(hit.ui==='action'){ const y=(1-hit.uv.y)*actionPanel.h; actDirty=true;
@@ -1145,7 +1145,7 @@ for(let i=0;i<2;i++){
   c.userData={line,dot:dotm,hit:null,connected:false,grab:null};
   c.addEventListener('connected',e=>{ c.userData.connected=true; c.userData.src=e.data; });
   c.addEventListener('disconnected',()=>{ c.userData.connected=false; });
-  c.addEventListener('selectstart',()=>{ activeCtl=c; onSelect(c.userData.hit); });
+  c.addEventListener('selectstart',()=>{ activeCtl=c; if(fire('ctlSelect',c)===true) return; onSelect(c.userData.hit); });
   c.addEventListener('squeezestart',()=>{ c.userData.grab={p:new THREE.Vector3().setFromMatrixPosition(c.matrixWorld), yaw:gYaw, pitch:gPitch}; });
   c.addEventListener('squeezeend',()=>{ c.userData.grab=null; });
   scene.add(c); controllers.push(c);
@@ -1295,7 +1295,7 @@ const G={THREE,S,M,on,fire,TABS,ACTIONS,EVENTS,EV_SCHED,resetMods,scene,room,cam
   get AC(){return AC;}, get master(){return master;}, get revIn(){return revIn;}, get radioIn(){return radioIn;}, get civIn(){return civIn;}, get tab(){return tab;}, set tab(v){tab=v;actDirty=true;},
   dirty(){ actDirty=cardDirty=hudDirty=bannerDirty=true; }, get topo(){return topoFeatures;}, get hoverUI(){return hoverUI;} };
 window.__g=G;
-for(const m of ['hands','tree','units','world','comms','campaign','tutorial']){ try{ (await import(`./v3/${m}.js`)).default(G); }catch(e){ console.error('módulo '+m, e); } }
+for(const m of ['hands','handtrack','tree','units','world','comms','campaign','family','outside','tutorial']){ try{ (await import(`./v3/${m}.js`)).default(G); }catch(e){ console.error('módulo '+m, e); } }
 G.dirty();
 </script>
 </body>

@@ -12,12 +12,12 @@ export default function (G) {
     { title: 'AMANECER', date: '24 DE NOVIEMBRE · 05:30 ZULÚ', voice: 'brief_4', tension: 50, drift: 1.25, ghost: 0.25, eMiss: 7, sub: true, sched: [[26, 'ejercicios'], [60, 'generales'], [96, 'falsa'], [134, 'sub'], [170, 'protestas'], [206, 'filtracion']],
       body: 'Última noche. Los dos bloques están en alerta máxima y la tensión sube más rápido que nunca. Todo lo que hizo en las noches anteriores cuenta: sus aliados, sus mejoras, la confianza del enemigo y las ciudades que ya no están. Si llega el amanecer sin que nadie dispare, se acaba la crisis.' },
   ];
-  const fresh = () => ({ night: 0, owned: [], pops: {}, npops: {}, stance: null, trust: 0, support: 62, carry: 0, history: [] });
+  const fresh = () => ({ home: null, family: 'ok', night: 0, owned: [], pops: {}, npops: {}, stance: null, trust: 0, support: 62, carry: 0, history: [] });
   let save = fresh(), epiPending = false;
   try { const raw = localStorage.getItem(KEY); if (raw) save = Object.assign(fresh(), JSON.parse(raw)); } catch (e) {}
   const store = () => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) {} };
   const origFalse = EVENTS.falsa.opts[1][1];
-  G.campaign = { NIGHTS, get save() { return save; }, reset() { save = fresh(); store(); if (G.tree) { G.tree.owned.clear(); G.tree.apply(); } }, setNight(n) { save.night = n; store(); } };
+  G.campaign = { NIGHTS, store: () => store(), get save() { return save; }, reset() { save = fresh(); store(); if (G.tree) { G.tree.owned.clear(); G.tree.apply(); } }, setNight(n) { save.night = n; store(); } };
   if (G.tree) { for (const id of save.owned) G.tree.owned.add(id); }
 
   // botón en la portada
