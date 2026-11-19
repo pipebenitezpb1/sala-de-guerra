@@ -100,7 +100,7 @@ const slug = s => s.normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replac
 const wait = ms => new Promise(r=>setTimeout(r,ms));
 
 // ================= AUDIO =================
-let AC=null, master, revIn, radioIn, drone=null, noiseBuf;
+let AC=null, master, revIn, radioIn, civIn, drone=null, noiseBuf;
 function initAudio(){
   if (AC){ if (AC.state==='suspended') AC.resume(); return; }
   try { AC = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){ return; }
@@ -117,6 +117,13 @@ function initAudio(){
   const sh=AC.createWaveShaper(); const cv=new Float32Array(1024); for(let i=0;i<1024;i++){const x=i/511.5-1; cv[i]=Math.tanh(2.2*x)/Math.tanh(2.2);} sh.curve=cv;
   const vg=AC.createGain(); vg.gain.value=0.9; const vr=AC.createGain(); vr.gain.value=0.18;
   radioIn.connect(hp).connect(lp).connect(pk).connect(sh).connect(vg).connect(master); vg.connect(vr).connect(revIn);
+  // cadena de radio civil (más sucia, lejana)
+  civIn = AC.createGain();
+  const chp=AC.createBiquadFilter(); chp.type='highpass'; chp.frequency.value=480;
+  const clp=AC.createBiquadFilter(); clp.type='lowpass'; clp.frequency.value=2500;
+  const csh=AC.createWaveShaper(); const cc=new Float32Array(1024); for(let i=0;i<1024;i++){const x=i/511.5-1; cc[i]=Math.tanh(4*x)/Math.tanh(4);} csh.curve=cc;
+  const cg=AC.createGain(); cg.gain.value=0.55; const cr=AC.createGain(); cr.gain.value=0.35;
+  civIn.connect(chp).connect(clp).connect(csh).connect(cg).connect(master); cg.connect(cr).connect(revIn);
   noiseBuf = makeNoise(4);
   startDrone(); startHum(); setTimeout(musicLoop, 3000); radarLoop(); heartLoop();
   ['intro','satelite','radio_civil','ambar','embajadas','interceptada','roja','irreversible','represalia','primero_ellos','no_autorizado','en_vuelo','interceptor'].forEach(id=>loadVoice(id).catch(()=>{}));
@@ -190,6 +197,63 @@ function click(t,vol){const s=noiseSrc();const hp=AC.createBiquadFilter();hp.typ
 function geiger(dur){const t0=AC.currentTime;let t=t0+1.2;while(t<t0+dur){click(t,0.1);t+=Math.random()*0.3*(1+(t-t0)/dur*4);}}
 function beep(f1,f2,dur=0.12,type='sine',vol=0.06){if(!AC)return;const t=AC.currentTime;[f1,f2].forEach((f,i)=>{if(!f)return;const o=AC.createOscillator();o.type=type;o.frequency.value=f;const g=AC.createGain();env(g,t+i*dur,0.005,vol,dur);o.connect(g);g.connect(master);g.connect(revIn);o.start(t+i*dur);o.stop(t+i*dur+dur+0.05);});}
 function sndStatic(dur=1.4,vol=0.07){if(!AC)return;const t=AC.currentTime;const s=noiseSrc();const bp=AC.createBiquadFilter();bp.type='bandpass';bp.frequency.value=1900;bp.Q.value=0.8;const g=AC.createGain();g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.03);g.gain.setValueAtTime(vol,t+Math.max(0.04,dur-0.05));g.gain.exponentialRampToValueAtTime(0.0001,t+dur);s.connect(bp).connect(g).connect(master);s.start(t,Math.random()*2);s.stop(t+dur);}
+// multitud lejana: lamentos (voces sintéticas con formantes de vocal "a"/"o")
+function sndCrowd(near){
+  if(!AC) return; const t0=AC.currentTime+1.2, N=near?16:9;
+  const bus=AC.createGain(); bus.gain.value=near?0.06:0.03;
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=near?2200:1100;
+  bus.connect(lp); lp.connect(master); const rv=AC.createGain(); rv.gain.value=near?1.2:1.8; lp.connect(rv).connect(revIn);
+  for(let i=0;i<N;i++){
+    const start=t0+rand(0,near?7:5), wails=near?2+Math.floor(Math.random()*2):1+Math.floor(Math.random()*2);
+    const f0=rand(240,560), o=AC.createOscillator(); o.type='sawtooth';
+    const vib=AC.createOscillator(); vib.frequency.value=rand(4.5,7); const vg=AC.createGain(); vg.gain.value=f0*0.025; vib.connect(vg).connect(o.frequency);
+    const g=AC.createGain(); g.gain.setValueAtTime(0.0001,start);
+    let t=start;
+    for(let w=0;w<wails;w++){ const d=rand(1.3,2.8);
+      o.frequency.setValueAtTime(f0*rand(0.85,1),t); o.frequency.linearRampToValueAtTime(f0*rand(1.2,1.45),t+0.45); o.frequency.exponentialRampToValueAtTime(f0*rand(0.55,0.75),t+d);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(rand(0.5,1),t+0.25); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
+      t+=d+rand(0.3,1.5); }
+    const f1=AC.createBiquadFilter(); f1.type='bandpass'; f1.frequency.value=rand(650,900); f1.Q.value=6;
+    const f2=AC.createBiquadFilter(); f2.type='bandpass'; f2.frequency.value=rand(1050,1350); f2.Q.value=7;
+    const pan=AC.createStereoPanner?AC.createStereoPanner():null;
+    o.connect(g); g.connect(f1); g.connect(f2); const sum=AC.createGain(); f1.connect(sum); f2.connect(sum);
+    if(pan){ pan.pan.value=rand(-0.8,0.8); sum.connect(pan).connect(bus); } else sum.connect(bus);
+    o.start(start); vib.start(start); o.stop(t+0.1); vib.stop(t+0.1);
+  }
+  // murmullo de fondo (ruido con formantes)
+  const s=noiseSrc(true); const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=600; bp.Q.value=1.5;
+  const ng=AC.createGain(); ng.gain.setValueAtTime(0.0001,t0); ng.gain.exponentialRampToValueAtTime(near?0.5:0.3,t0+2); ng.gain.exponentialRampToValueAtTime(0.0001,t0+12);
+  s.connect(bp).connect(ng).connect(bus); s.start(t0); s.stop(t0+12.5);
+}
+// sirena de defensa civil, lejana
+let sirenUntil=0;
+function sndSiren(dur=14){
+  if(!AC) return; const t=AC.currentTime; if(t<sirenUntil) return; sirenUntil=t+dur;
+  const o=AC.createOscillator(); o.type='triangle'; const o2=AC.createOscillator(); o2.type='sine';
+  o.frequency.setValueAtTime(220,t); o2.frequency.setValueAtTime(330,t);
+  for(let k=0;k<dur;k+=7){ o.frequency.linearRampToValueAtTime(560,t+k+3); o.frequency.linearRampToValueAtTime(230,t+k+7); o2.frequency.linearRampToValueAtTime(840,t+k+3); o2.frequency.linearRampToValueAtTime(345,t+k+7); }
+  const lp=AC.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=900;
+  const g=AC.createGain(); g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.035,t+2); g.gain.setValueAtTime(0.035,t+dur-2); g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(lp); o2.connect(lp); lp.connect(g); g.connect(revIn); const d=AC.createGain(); d.gain.value=0.4; g.connect(d).connect(master);
+  o.start(t); o2.start(t); o.stop(t+dur); o2.stop(t+dur);
+}
+// transmisiones civiles interceptadas
+let civBusy=false, civBag=[];
+async function civilRadio(){
+  if(!AC || civBusy) return; civBusy=true;
+  if(!civBag.length) civBag=[1,2,3,4,5,6,7,8,9,10].sort(()=>Math.random()-0.5);
+  const id='civ_'+civBag.pop();
+  try{
+    const buf=await loadVoice(id); const t=AC.currentTime+0.1;
+    const s=noiseSrc(true); const bp=AC.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1600; bp.Q.value=0.6;
+    const ng=AC.createGain(); ng.gain.setValueAtTime(0.0001,t); ng.gain.exponentialRampToValueAtTime(0.03,t+0.05); ng.gain.setValueAtTime(0.03,t+buf.duration+0.4); ng.gain.exponentialRampToValueAtTime(0.0001,t+buf.duration+0.7);
+    const am=AC.createOscillator(); am.frequency.value=rand(3,9); const ag=AC.createGain(); ag.gain.value=0.015; am.connect(ag).connect(ng.gain);
+    s.connect(bp).connect(ng).connect(master); s.start(t); s.stop(t+buf.duration+0.8); am.start(t); am.stop(t+buf.duration+0.8);
+    const src=AC.createBufferSource(); src.buffer=buf; src.playbackRate.value=rand(0.94,1.0); src.connect(civIn); src.start(t+0.3);
+    await new Promise(r=>src.onended=r);
+  }catch(e){}
+  await wait(4000); civBusy=false;
+}
 let lastTick=0;
 function tick(){if(!AC)return;const t=AC.currentTime;if(t-lastTick<0.07)return;lastTick=t;const o=AC.createOscillator();o.frequency.value=2400;const g=AC.createGain();env(g,t,0.002,0.01,0.03);o.connect(g).connect(master);o.start(t);o.stop(t+0.05);}
 function endMusic(){
@@ -281,7 +345,7 @@ for(const x of [-RW/2+0.25, RW/2-0.25]) for(const z of [-3.6,-0.5,2.5]) box(0.4,
 for(const z of [-3.6,-0.5,2.5]) box(RW,0.3,0.35, metal, 0,RH-0.15,z);
 // tuberías
 const pipeMat = std(0x3a3a34,0.5,0.7);
-for(const [y,x] of [[RH-0.45,-4.6],[RH-0.62,-4.3],[RH-0.45,4.5]]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,RD,10), pipeMat); p.rotation.x=Math.PI/2; p.position.set(x,y,(RZ0+RZ1)/2); room.add(p); }
+for(const [y,x] of [[RH-0.45,4.5],[RH-0.62,4.2]]){ const p=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,RD,10), pipeMat); p.rotation.x=Math.PI/2; p.position.set(x,y,(RZ0+RZ1)/2); room.add(p); }
 // luces de techo
 const ceilPanels=[];
 for(let z=-2.2; z<=4; z+=2.2) for(const x of [-2.6,2.6]){ const m=box(1.4,0.05,0.3, basic(0x6a7a80), x, RH-0.33, z); ceilPanels.push(m); }
@@ -381,7 +445,8 @@ const v2ll = v => { const n=v.clone().normalize(); const lat=Math.asin(THREE.Mat
 
 // ================= MAPA DE PARED =================
 const WALL_W=7.6, LAT_MIN=-58, LAT_MAX=84, WALL_H=WALL_W*(LAT_MAX-LAT_MIN)/360;
-const wall = new THREE.Group(); wall.position.set(0,2.3,RZ0+0.12); room.add(wall);
+// en la pared izquierda, para que no quede detrás del globo
+const wall = new THREE.Group(); wall.position.set(-RW/2+0.62,2.55,0.4); wall.rotation.y=Math.PI/2; room.add(wall);
 box(WALL_W+0.2, WALL_H+0.2, 0.08, std(0x0c1214,0.5,0.6), 0,0,-0.05, wall);
 const wallBg = new THREE.Mesh(new THREE.PlaneGeometry(WALL_W,WALL_H), basic(0x02090c)); wall.add(wallBg);
 const wcCanvas=document.createElement('canvas'); wcCanvas.width=4096; wcCanvas.height=2048;
@@ -445,12 +510,13 @@ function makePanel(w,h,pw,ph,parent){
   parent.add(mesh); return {c, g:c.getContext('2d'), tex, mesh, w:pw, h:ph};
 }
 const hud = makePanel(0.95,0.42,1280,564, room); hud.mesh.position.set(-0.38,0.86,-0.66); hud.mesh.rotation.set(-0.85,0.12,0.0,'YXZ');
-const banner = makePanel(4.2,0.41,2048,200, room); banner.mesh.position.set(0, 2.3+WALL_H/2+0.38, RZ0+0.1);
-const cntE = makePanel(1.3,0.87,768,512, room); cntE.mesh.position.set(-4.65,2.3,RZ0+0.6); cntE.mesh.rotation.y=0.5;
-const cntP = makePanel(1.3,0.87,768,512, room); cntP.mesh.position.set( 4.65,2.3,RZ0+0.6); cntP.mesh.rotation.y=-0.5;
+const banner = makePanel(4.2,0.41,2048,200, room); banner.mesh.position.set(0, 3.55, RZ0+0.1);
+const cntE = makePanel(1.6,1.07,768,512, room); cntE.mesh.position.set(-2.9,2.2,RZ0+0.1);
+const cntP = makePanel(1.6,1.07,768,512, room); cntP.mesh.position.set( 2.9,2.2,RZ0+0.1);
 const deskCnt = makePanel(0.62,0.3,768,372, room); deskCnt.mesh.position.set(0.5,0.86,-0.68); deskCnt.mesh.rotation.set(-0.85,-0.12,0,'YXZ');
 const label = makePanel(0.36,0.094,768,200, scene); label.mesh.visible=false; label.mesh.renderOrder=10; label.mesh.material.depthTest=false;
-const report = makePanel(WALL_W*0.72, WALL_H*0.9, 2048, Math.round(2048*WALL_H*0.9/(WALL_W*0.72)), wall); report.mesh.position.z=0.06; report.mesh.visible=false;
+// informe final: flota entre tú y el globo
+const report = makePanel(1.25, 0.6, 2048, 983, room); report.mesh.position.set(0,1.38,-0.95); report.mesh.rotation.x=0.08; report.mesh.visible=false;
 
 function wrap(g,text,maxW){const words=text.split(' ');const lines=[];let cur='';for(const w of words){const t=cur?cur+' '+w:w;if(g.measureText(t).width>maxW&&cur){lines.push(cur);cur=w;}else cur=t;}if(cur)lines.push(cur);return lines;}
 let hudDirty=true;
@@ -582,6 +648,8 @@ function impact(f){
     const killed=T.popRemaining*rand(0.35,0.62); T.popRemaining-=killed; addCas(T.bloc,killed);
     T.radPending+=T.popRemaining*0.1; T.radRate=T.radPending/30; T.hits++; S.citiesHit.add(T.name);
     T.mk.material.color.set(0x5a1a14); T.burn.visible=true; paintScar(T.lat,T.lon);
+    sndCrowd(near);
+    if(near || Math.random()<0.5) S.timers.push({t:S.time+rand(4,8), fn:civilRadio});
     if(T.bloc==='E'){
       say(`Impacto confirmado en ${T.name}. ${fmtM(killed)} de muertos estimados.`, ['imp_'+slug(T.name), bajasId(killed)], 1, '#ff9a8a');
       if(T.hits===1) S.timers.push({t:S.time+rand(7,11), fn:()=>{ sndStatic(); addLog(pick(FLAVOR_E)(T.name), '#8fa6aa'); }});
@@ -648,6 +716,7 @@ function enemyFire(){
   if(pSilos.length && Math.random()<0.25) tgt=pick(pSilos);
   else { const pc=cities.filter(c=>c.bloc==='P'); const w=pc.map(c=>Math.pow(c.popRemaining+1,0.7)); let r=Math.random()*w.reduce((a,b)=>a+b,0); tgt=pc[0]; for(let i=0;i<pc.length;i++){ r-=w[i]; if(r<=0){tgt=pc[i];break;} } }
   const f=launch('E', silo, tgt);
+  if(tgt.type==='city') sndSiren(Math.min(18,f.dur));
   if(S.time-S.lastIncomingVoice>9 && tgt.type==='city'){ S.lastIncomingVoice=S.time; alarm(2,0.06); say(`Misil entrante. Objetivo: ${tgt.name}. Impacto en ${Math.round(f.dur)} s.`,'inc_'+slug(tgt.name),1,'#ff6a5a'); }
   else addLog(`Misil entrante → ${tgt.name}.`, '#ff6a5a');
 }
@@ -709,6 +778,7 @@ function endGame(){
   if(S.ended) return; S.ended=true; S.endT=S.time; S.enemyActive=false; S.armed=null; setPhase(FIN);
   endMusic(); drawReport(); report.mesh.visible=true;
   const total=S.enemyCas+S.playerCas, N=Math.min(500,Math.max(10,Math.round(total/1e7)*10));
+  S.timers.push({t:S.time+22, fn:()=>{ civBusy=false; civBag=[8]; civilRadio(); }});
   S.timers.push({t:S.time+2.5, fn:()=>say(`Fin de las hostilidades. Víctimas totales: ${fmtM(total)} de personas.`,['fin','total_'+N,'fin2'],2,'#bfe6ea')});
 }
 function drawReport(){
